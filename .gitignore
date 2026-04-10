@@ -1,4 +1,16 @@
 .venv/
 .env
+.env.*
+!.env.example
 __pycache__/
 *.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Streamlit local secrets (safe to keep config.toml tracked)
+.streamlit/secrets.toml
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
