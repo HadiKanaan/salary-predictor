@@ -45,6 +45,19 @@ def get_supabase_client(url: str, key: str) -> DashboardSupabaseClient:
     return DashboardSupabaseClient(url=url, key=key)
 
 
+def get_config_value(key: str, default: str = "") -> str:
+    """Reads configuration from Streamlit secrets first, then environment variables."""
+    try:
+        if key in st.secrets:
+            value = st.secrets[key]
+            if value is not None:
+                return str(value)
+    except Exception:
+        pass
+
+    return os.getenv(key, default)
+
+
 @st.cache_data
 def decode_dataframe(csv_path: str, encoders_path: str) -> pd.DataFrame:
     """Loads and decodes categorical columns for analytics."""
@@ -76,13 +89,17 @@ def to_currency(value: float) -> str:
 
 
 def render_predict_tab(
-    client: ApiClient,
+    client: ApiClient | None,
     decoded_df: pd.DataFrame,
     supabase_client: DashboardSupabaseClient | None,
 ) -> None:
     """Renders the prediction workflow tab."""
     st.subheader("Predict Salary")
     st.caption("Fill in role details and get a salary prediction in USD.")
+
+    if client is None:
+        st.info("This feature is available in the local app only, where FastAPI is running.")
+        return
 
     try:
         options = get_options(client)
@@ -380,6 +397,10 @@ def render_model_tab(client: ApiClient) -> None:
     st.subheader("Model Status")
     st.caption("Check API health and retrain the model from the dashboard.")
 
+    if client is None:
+        st.info("Model controls are available in the local app only, where FastAPI is running.")
+        return
+
     left, right = st.columns(2)
 
     with left:
@@ -411,10 +432,14 @@ def render_model_tab(client: ApiClient) -> None:
         st.caption(f"Model saved to: {metrics['model_path']}")
 
 
-def render_text_tab(client: ApiClient, supabase_client: DashboardSupabaseClient | None) -> None:
+def render_text_tab(client: ApiClient | None, supabase_client: DashboardSupabaseClient | None) -> None:
     """Renders an Ollama-backed text analysis workflow."""
     st.subheader("Text Analysis")
     st.caption("Generate narrative insights and a score chart from your local Ollama model.")
+
+    if client is None:
+        st.info("Text analysis is available in the local app only, where the FastAPI backend runs Ollama.")
+        return
 
     task = st.selectbox(
         "Analysis Task",
@@ -512,9 +537,9 @@ def main() -> None:
         initial_sidebar_state="expanded",
     )
 
-    api_base_url = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
-    supabase_url = os.getenv("SUPABASE_URL", "")
-    supabase_key = os.getenv("SUPABASE_KEY", "")
+    api_base_url = get_config_value("API_BASE_URL", "")
+    supabase_url = get_config_value("SUPABASE_URL", "")
+    supabase_key = get_config_value("SUPABASE_KEY", "")
     csv_path = resolve_project_path(os.getenv("TRAINING_DATA_PATH", ""), DEFAULT_CSV_PATH)
     encoders_path = resolve_project_path(os.getenv("ENCODERS_PATH", ""), DEFAULT_ENCODERS_PATH)
 
@@ -523,12 +548,12 @@ def main() -> None:
 
     with st.sidebar:
         st.header("Configuration")
-        st.write(f"API Base URL: {api_base_url}")
+        st.write(f"API Enabled: {'Yes' if api_base_url else 'No'}")
         st.write(f"Supabase Configured: {'Yes' if supabase_url and supabase_key else 'No'}")
         st.write(f"Data Source: {csv_path}")
         st.write(f"Encoders: {encoders_path}")
 
-    client = get_api_client(api_base_url)
+    client: ApiClient | None = get_api_client(api_base_url) if api_base_url else None
     supabase_client: DashboardSupabaseClient | None = None
 
     if supabase_url and supabase_key:
@@ -542,6 +567,17 @@ def main() -> None:
     except Exception as exc:
         st.error(f"Failed to load data: {exc}")
         st.stop()
+
+    if client is None:
+        tab_insights, tab_records = st.tabs(["Insights", "Records"])
+        st.info(
+            "This hosted dashboard is running without FastAPI. Prediction, model, and text analysis are local-only."
+        )
+        with tab_insights:
+            render_insights_tab(decoded_df)
+        with tab_records:
+            render_records_tab(decoded_df, supabase_client)
+        return
 
     tab_predict, tab_insights, tab_records, tab_model, tab_text = st.tabs(
         ["Predict", "Insights", "Records", "Model", "Text Analysis"]

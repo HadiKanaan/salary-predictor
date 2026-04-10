@@ -124,8 +124,7 @@ Use `.env.example` as the template for local setup.
 3. Add these secrets in Streamlit Cloud app settings:
 	- `SUPABASE_URL`
 	- `SUPABASE_KEY`
-	- `API_BASE_URL` (use a hosted API URL if prediction/training/text features should work online)
-	- `MODEL_PATH`, `ENCODERS_PATH`, `TRAINING_DATA_PATH` (optional for hosted dashboard visuals)
-	- `OLLAMA_BASE_URL`, `OLLAMA_MODEL` (only if your API uses Ollama)
-4. In the hosted dashboard, use the Records tab with source set to Supabase to load cloud data.
+	- Do not set `API_BASE_URL` if you want the hosted app to stay Supabase-only.
+4. In the hosted dashboard, only the Insights and Records tabs are available.
+5. If you want prediction, retraining, or Ollama text analysis, run the app locally with FastAPI and set `API_BASE_URL` in your local `.env`.
 
